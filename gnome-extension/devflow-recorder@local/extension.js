@@ -1,5 +1,7 @@
 "use strict";
 
+imports.gi.versions.Soup = "3.0";
+
 const ByteArray = imports.byteArray;
 const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
@@ -18,6 +20,7 @@ let session = null;
 let timerId = 0;
 let lastWindowKey = "";
 let lastSentAt = 0;
+let lastError = "";
 
 function init() {
 }
@@ -99,13 +102,25 @@ function sendFocusedWindow() {
   if (bridgeToken) {
     message.request_headers.append("X-DevFlow-Token", bridgeToken);
   }
-  message.set_request("application/json", Soup.MemoryUse.COPY, body);
+  message.set_request_body_from_bytes("application/json", GLib.Bytes.new(body));
 
-  session.queue_message(message, (_session, response) => {
-    const ok = response.status_code >= 200 && response.status_code < 300;
+  session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (_session, result) => {
+    let ok = false;
+    try {
+      session.send_and_read_finish(result);
+      const status = message.get_status ? message.get_status() : message.status_code;
+      ok = status >= 200 && status < 300;
+      if (!ok) {
+        debugOnce(`bridge returned HTTP ${status}`);
+      }
+    } catch (error) {
+      debugOnce(error.message || String(error));
+    }
+
     if (ok) {
       lastWindowKey = windowKey;
       lastSentAt = now;
+      lastError = "";
     }
 
     if (indicator) {
@@ -115,7 +130,9 @@ function sendFocusedWindow() {
 }
 
 function readFocusedWindow() {
-  const window = global.display.focus_window;
+  const window = global.display.get_focus_window
+    ? global.display.get_focus_window()
+    : global.display.focus_window;
   if (!window) {
     return null;
   }
@@ -164,4 +181,13 @@ function readBridgeToken() {
   } catch (_error) {
     return "";
   }
+}
+
+function debugOnce(message) {
+  if (!message || message === lastError) {
+    return;
+  }
+
+  lastError = message;
+  log(`DevFlow Recorder Bridge: ${message}`);
 }
