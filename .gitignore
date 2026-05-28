@@ -1,0 +1,22 @@
+node_modules/
+dist/
+src-tauri/target/
+*.log
+
+# Local runtime data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+bridge-token
+
+# Local environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,8 @@
+{
+  "uuid": "devflow-recorder@local",
+  "name": "DevFlow Recorder Bridge",
+  "description": "Reports GNOME Wayland focused window metadata to the local DevFlow Recorder app.",
+  "shell-version": ["42", "43", "44"],
+  "version": 1,
+  "url": "https://local.devflow.recorder"
+}

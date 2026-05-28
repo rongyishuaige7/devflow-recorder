@@ -1,0 +1,19 @@
+[package]
+name = "devflow_recorder"
+version = "0.1.0"
+description = "Wayland-first local workflow recorder for Linux developers"
+authors = ["rongyi"]
+edition = "2021"
+
+[lib]
+name = "devflow_recorder_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
