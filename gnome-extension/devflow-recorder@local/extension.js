@@ -1,7 +1,5 @@
 "use strict";
 
-imports.gi.versions.Soup = "3.0";
-
 const ByteArray = imports.byteArray;
 const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
@@ -14,6 +12,11 @@ const St = imports.gi.St;
 const BRIDGE_URL = "http://127.0.0.1:45173/v1/gnome/window";
 const EXTENSION_UUID = "devflow-recorder@local";
 const HEARTBEAT_INTERVAL_MS = 5000;
+const DIAG_PATH = GLib.build_filenamev([
+  GLib.get_user_cache_dir(),
+  "devflow-recorder",
+  "gnome-extension.log"
+]);
 
 let indicator = null;
 let session = null;
@@ -26,9 +29,15 @@ function init() {
 }
 
 function enable() {
+  debug("enable");
   session = new Soup.Session();
-  indicator = new DevFlowIndicator();
-  Main.panel.addToStatusArea(EXTENSION_UUID, indicator);
+  try {
+    indicator = new DevFlowIndicator();
+    Main.panel.addToStatusArea(EXTENSION_UUID, indicator);
+  } catch (error) {
+    indicator = null;
+    debug(`indicator failed: ${error.message || String(error)}`);
+  }
 
   sendFocusedWindow();
   timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
@@ -38,6 +47,7 @@ function enable() {
 }
 
 function disable() {
+  debug("disable");
   if (timerId) {
     GLib.source_remove(timerId);
     timerId = 0;
@@ -80,6 +90,7 @@ class DevFlowIndicator extends PanelMenu.Button {
 function sendFocusedWindow() {
   const payload = readFocusedWindow();
   if (!payload || !session) {
+    diag(payload ? "skip:no-session" : "skip:no-focus");
     return;
   }
 
@@ -92,6 +103,7 @@ function sendFocusedWindow() {
 
   const now = Date.now();
   if (windowKey === lastWindowKey && now - lastSentAt < HEARTBEAT_INTERVAL_MS) {
+    diag("skip:heartbeat");
     return;
   }
 
@@ -102,31 +114,54 @@ function sendFocusedWindow() {
   if (bridgeToken) {
     message.request_headers.append("X-DevFlow-Token", bridgeToken);
   }
-  message.set_request_body_from_bytes("application/json", GLib.Bytes.new(body));
 
+  if (message.set_request && session.queue_message) {
+    diag("send:soup2");
+    sendWithSoup2(message, body, windowKey, now);
+  } else if (message.set_request_body_from_bytes && session.send_and_read_async) {
+    diag("send:soup3");
+    sendWithSoup3(message, body, windowKey, now);
+  } else {
+    debugOnce("unsupported libsoup API");
+  }
+}
+
+function sendWithSoup2(message, body, windowKey, sentAt) {
+  message.set_request("application/json", Soup.MemoryUse.COPY, body);
+  session.queue_message(message, (_session, response) => {
+    handleBridgeResponse(response.status_code, null, windowKey, sentAt);
+  });
+}
+
+function sendWithSoup3(message, body, windowKey, sentAt) {
+  message.set_request_body_from_bytes("application/json", GLib.Bytes.new(body));
   session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (_session, result) => {
-    let ok = false;
     try {
       session.send_and_read_finish(result);
       const status = message.get_status ? message.get_status() : message.status_code;
-      ok = status >= 200 && status < 300;
-      if (!ok) {
-        debugOnce(`bridge returned HTTP ${status}`);
-      }
+      handleBridgeResponse(status, null, windowKey, sentAt);
     } catch (error) {
-      debugOnce(error.message || String(error));
-    }
-
-    if (ok) {
-      lastWindowKey = windowKey;
-      lastSentAt = now;
-      lastError = "";
-    }
-
-    if (indicator) {
-      indicator.setOnline(ok);
+      handleBridgeResponse(0, error, windowKey, sentAt);
     }
   });
+}
+
+function handleBridgeResponse(status, error, windowKey, sentAt) {
+  const ok = status >= 200 && status < 300;
+  diag(ok ? `ok:${status}` : `fail:${status}`);
+  if (ok) {
+    lastWindowKey = windowKey;
+    lastSentAt = sentAt;
+    lastError = "";
+  } else if (error) {
+    debugOnce(error.message || String(error));
+  } else {
+    debugOnce(`bridge returned HTTP ${status}`);
+  }
+
+  if (indicator) {
+    indicator.setOnline(ok);
+  }
 }
 
 function readFocusedWindow() {
@@ -189,5 +224,33 @@ function debugOnce(message) {
   }
 
   lastError = message;
+  debug(`error:${message}`);
+}
+
+function debug(message) {
   log(`DevFlow Recorder Bridge: ${message}`);
+  diag(message);
+}
+
+function diag(message) {
+  try {
+    const dir = GLib.path_get_dirname(DIAG_PATH);
+    GLib.mkdir_with_parents(dir, 0o700);
+    const line = `${new Date().toISOString()} ${message}\n`;
+    GLib.file_set_contents(DIAG_PATH, readDiagTail() + line);
+  } catch (_error) {
+  }
+}
+
+function readDiagTail() {
+  try {
+    const [ok, contents] = GLib.file_get_contents(DIAG_PATH);
+    if (!ok) {
+      return "";
+    }
+
+    return ByteArray.toString(contents).split("\n").slice(-80).join("\n");
+  } catch (_error) {
+    return "";
+  }
 }

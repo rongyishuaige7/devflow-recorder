@@ -131,6 +131,7 @@ gnome-extensions enable devflow-recorder@local
 ```
 
 If GNOME says the extension was not found, log out and back in on Wayland, then enable it again.
+If you update `extension.js` while already logged in, GNOME Wayland may keep the old extension code in the running Shell process. In that case, log out and back in, then run the app again.
 
 When enabled, the top bar shows a small `DF` indicator. The extension reports focused window metadata to the local bridge:
 
@@ -139,6 +140,14 @@ http://127.0.0.1:45173/v1/gnome/window
 ```
 
 The backend generates a local `bridge-token` on startup. The extension reads that token and sends it with the `X-DevFlow-Token` header. Requests without the token are rejected.
+
+For troubleshooting, the extension writes a small status-only diagnostic log to:
+
+```text
+~/.cache/devflow-recorder/gnome-extension.log
+```
+
+The log contains lifecycle and HTTP status events such as `enable`, `send:soup2`, `send:soup3`, and `ok:204`. It does not include window titles.
 
 ## Development Commands
 
