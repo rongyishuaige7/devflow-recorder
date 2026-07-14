@@ -4,6 +4,12 @@ DevFlow Recorder is a local-first workflow recorder for Linux developers. It wat
 
 The project is currently an MVP. It is useful for testing real desktop activity collection, especially on GNOME Wayland, but the reporting and browser/project integrations are still early.
 
+## Interface Preview
+
+![DevFlow Recorder timeline preview](./docs/screenshots/timeline-preview.png)
+
+The screenshot above is captured from the repository's browser preview mode. The rows are explicitly marked as example data; real GNOME/Hyprland/Sway activity is shown only when the Tauri backend and a desktop provider are connected.
+
 ## What It Does
 
 - Records active application and window title changes.
