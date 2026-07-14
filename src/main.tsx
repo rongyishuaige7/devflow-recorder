@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  countUsableProviders,
+  formatDuration,
+  formatTotalDuration,
+  totalDurationSeconds,
+  type ProviderState
+} from "./activity";
 import "./styles.css";
-
-type ProviderState = "ready" | "partial" | "available" | "planned" | "standby";
 
 type ProviderStatus = {
   id: string;
@@ -296,13 +301,8 @@ function App() {
     return snapshot.events.filter((event) => event.kind === selectedFilter);
   }, [selectedFilter, snapshot.events]);
 
-  const totalSeconds = snapshot.events.reduce(
-    (sum, event) => sum + (event.durationSeconds ?? event.durationMinutes * 60),
-    0
-  );
-  const readyProviders = snapshot.environment.providers.filter((provider) =>
-    ["ready", "available", "partial"].includes(provider.state)
-  ).length;
+  const totalSeconds = totalDurationSeconds(snapshot.events);
+  const readyProviders = countUsableProviders(snapshot.environment.providers);
   const hasRealEvents = snapshotMode === "tauri" && snapshot.events.length > 0;
   const isTauriWithoutWindow = snapshotMode === "tauri" && !snapshot.activeWindow;
 
@@ -556,31 +556,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function formatDuration(event: ActivityEvent) {
-  const seconds = event.durationSeconds ?? event.durationMinutes * 60;
-
-  if (seconds < 60) {
-    return `${Math.max(1, seconds)}s`;
-  }
-
-  return `${Math.floor(seconds / 60)}m`;
-}
-
-function formatTotalDuration(seconds: number) {
-  if (seconds < 60) {
-    return `${Math.max(0, seconds)}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  return restMinutes ? `${hours}h ${restMinutes}m` : `${hours}h`;
 }
 
 createRoot(document.getElementById("root")!).render(
